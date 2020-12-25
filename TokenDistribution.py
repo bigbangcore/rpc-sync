@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
  
 class TokenDistribution:
@@ -12,11 +12,16 @@ class TokenDistribution:
             height += 43200
             self.m_ltd.append({"reward":reward,"total":total,"height":height})
     
-        for i in range(11):
+        for i in range(2):
             reward = 603 - 53 * i
-
             total += (43200 * 5) * reward
             height += (43200 * 5)
+            self.m_ltd.append({"reward":reward,"total":total,"height":height})
+
+        for i in range(9):
+            reward = 100 - 10 * i
+            total += (43200 * 5 * 5) * reward
+            height += (43200 * 5 * 5)
             self.m_ltd.append({"reward":reward,"total":total,"height":height})
 
     def GetTotal(self,height):
@@ -27,8 +32,8 @@ class TokenDistribution:
                 return obj["total"] - (obj["height"] - height) * obj["reward"]
             max_height = obj["height"]
             max_money = obj["total"]
-        return max_money + (height - max_height) * 20
+        return max_money + (height - max_height) * 10
 
     def PrintInfo(self):
         for obj in self.m_ltd:
-            print obj
+            print(obj)

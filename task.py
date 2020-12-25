@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 
 import requests
@@ -10,12 +10,14 @@ import sys
 import os
 import config
 import logging
+import traceback 
 
 from ctypes import *
 from binascii import a2b_hex
 from TokenDistribution import TokenDistribution
 
 td = TokenDistribution()
+
 bbc = cdll.LoadLibrary('./libcrypto.so')
 bbc.GetAddr.argtypes = [c_char_p]
 bbc.GetAddr.restype = c_char_p
@@ -36,6 +38,22 @@ def ExecSql(sql):
         return cursor.lastrowid
     except Exception as e:
         return 0
+
+
+def GetTask():
+    with connection.cursor() as cursor:
+        sql = 'SELECT id,block_hash from Task where is_ok = 0 limit 1'
+        cursor.execute(sql)
+        connection.commit()
+        return cursor.fetchone()
+
+
+def SbumitTask(taskid):
+    with connection.cursor() as cursor:
+        sql = 'update Task set is_ok = 1 where id = %s' % taskid
+        cursor.execute(sql)
+        connection.commit()
+
 
 def GetBlock(block_hash):
     with connection.cursor() as cursor:
@@ -70,36 +88,28 @@ def InsertTx(block_id,tx,cursor):
     client_in = None
     dpos_out = None
     client_out = None
-    '''
     if tx["sendto"][:4] == "20w0":
         dpos_in,client_in = GetVote(tx["sig"][0:132])
     if tx["sendfrom"][:4] == "20w0":
-        dpos_out,client_out = GetVote(tx["sig"][-260:][:132])
-    '''
-
-    if tx["sendto"][:4] == "20w0":    
-        dpos_in,client_in = GetVote(tx["sig"][0:132])
-    if tx["sendfrom"][:4] == "20w0":    
-        if tx["sendto"][:4] == "20w0":        
-            dpos_out,client_out = GetVote(tx["sig"][132:264])    
-        else:        
+        if tx["sendto"][:4] == "20w0":
+            dpos_out,client_out = GetVote(tx["sig"][132:264])
+        else:
             dpos_out,client_out = GetVote(tx["sig"][0:132])
-
-
     data = None
     if len(tx["data"]) > 0:
         data = tx["data"]
-        if len(data) >= 4096:
-            data = data[:4096]
-    sql = "insert Tx(block_hash,txid,form,`to`,amount,free,type,lock_until,n,data,dpos_in,client_in,dpos_out,client_out)values(%s,%s,%s,%s,%s,%s,%s,%s,0,%s,%s,%s,%s,%s)"
-    cursor.execute(sql,[block_id,tx["txid"], tx["sendfrom"],tx["sendto"],tx["amount"],tx["txfee"],tx["type"],tx["lockuntil"],data,dpos_in,client_in,dpos_out,client_out])
-    
-    amount = Decimal(tx["amount"]).quantize(Decimal('0.000000')) # Decimal(str(tx["amount"]))
-    txfee = Decimal(tx["txfee"]).quantize(Decimal('0.000000')) #Decimal(str(tx["txfee"]))
+        if tx["type"] == 'certification':
+            data = 'certification'
+        elif len(data) >= 4096:
+            data = data[:4096]     
+    sql = "insert Tx(block_hash,txid,form,`to`,amount,free,type,lock_until,n,data,dpos_in,client_in,dpos_out,client_out,transtime)values(%s,%s,%s,%s,%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s)"
+    cursor.execute(sql,[block_id,tx["txid"], tx["sendfrom"],tx["sendto"],tx["amount"],tx["txfee"],tx["type"],tx["lockuntil"],data,dpos_in,client_in,dpos_out,client_out,tx["time"]])
+    amount = Decimal("%.6f" % tx["amount"])
+    txfee = Decimal("%.6f" % tx["txfee"])
     if in_money > (amount + txfee):
         amount = in_money - (amount  + txfee)
-        sql = "insert Tx(block_hash,txid,form,`to`,amount,free,type,lock_until,n,data)values(%s,%s,%s,%s,%s,%s,%s,%s,1,%s)"
-        cursor.execute(sql,[block_id,tx["txid"],tx["sendfrom"],tx["sendfrom"],amount,0,tx["type"],0,data])
+        sql = "insert Tx(block_hash,txid,form,`to`,amount,free,type,lock_until,n,data,transtime)values(%s,%s,%s,%s,%s,%s,%s,%s,1,%s,%s)"
+        cursor.execute(sql,[block_id,tx["txid"],tx["sendfrom"],tx["sendfrom"],amount,0,tx["type"],0,data,tx["time"]])
     
 
 def RollBACK(block_hash):
@@ -116,11 +126,13 @@ def RollBACK(block_hash):
             cursor.execute(sql)
         connection.commit()
 
-
 def Useful(block_hash):
     with connection.cursor() as cursor:
-        #logging.info('\r\ngetblockdetail:' + block_hash)
-        data = {"id":1,"method":"getblockdetail","jsonrpc":"2.0","params":{"block":block_hash}}
+        data = {"id":1,
+                "method":"getblockdetail",
+                "jsonrpc":"2.0",
+                "params":{"block": block_hash}
+                } 
         response = requests.post(url, json=data)
         obj = json.loads(response.text)
         if "result" in obj:
@@ -139,8 +151,7 @@ def Useful(block_hash):
             InsertTx(block_hash,tx,cursor)
         InsertTx(block_hash,obj["txmint"],cursor)
         connection.commit()
-    Check()
-    return True
+        return True
 
 
 def GetEndData():
@@ -212,9 +223,14 @@ def ExecTask(block_hash):
     task_add = []
     db_res = GetUsefulBlock(block_hash)
     while db_res == None:
+        print(block_hash)
         task_add.append(block_hash)
-        data = {"id":1,"method":"getblock","jsonrpc":"2.0","params":{"block": block_hash}}
-        response = requests.post(url, json = data)
+        data = {"id":1,
+                "method":"getblock",
+                "jsonrpc":"2.0",
+                "params":{"block": block_hash}
+                }
+        response = requests.post(url, json=data)
         res = json.loads(response.text)
         if "result" in res:
             res = res["result"]
@@ -235,15 +251,21 @@ def ExecTask(block_hash):
         if Useful(use_hash) == False:
             print("use_hash Error",use_hash)
             return
-            #sys.exit()
 
 def Getblockhash(height):
-    data = {"id":1,"method":"getblockhash","jsonrpc":"2.0","params":{"height":height}}
+    data = {"id":1,
+            "method":"getblockhash",
+            "jsonrpc":"2.0",
+            "params":{"height":height}
+            }
     response = requests.post(url, json=data)
     return json.loads(response.text)
 
 def Getforkheight():
-    data = {"id":1,"method":"getforkheight","jsonrpc":"2.0","params":{}}
+    data = {"id":2,
+            "method":"getforkheight",
+            "jsonrpc":"2.0",
+            "params":{}}
     response = requests.post(url, json=data)
     obj = json.loads(response.text)
     if "result" in obj:
@@ -255,38 +277,11 @@ def Getforkheight():
     if end_data == None:
         return 1
     if obj > end_data[2]:
-        if (end_data[2] + 10000) < obj:
-            return (end_data[2] + 10000)
-        else:
-            return obj
+        return obj
     else:
         return 0
 
-def GetPool():
-    with connection.cursor() as cursor:
-        sql = "select address from pool"
-        cursor.execute(sql)
-        connection.commit()
-        return cursor.fetchall
-
-# listdelegate
-def GetListDelegate():
-    data = {"id":1,"method":"listdelegate","jsonrpc":"2.0","params":{}}
-    response = requests.post(url, json = data)
-    obj = json.loads(response.text)
-    if "result" in obj:
-        rows = GetPool()
-        print(rows)
-        for elem in obj["result"]:
-            if elem not in rows:
-                sql = "insert pool(address,name,type,`key`,fee)values(%s,%s,%s,%s,%s)"
-                cursor.execute(sql,elem,'','dpos','123456',0.05)
-        connection.commit() 
-    else:
-        return False
-
 def Check():
-    return
     sql1 = "SELECT height from Block ORDER BY id DESC LIMIT 1"
     sql2 = "select sum(amount) as c from Tx where spend_txid is null"
     with connection.cursor() as cursor :
@@ -298,25 +293,32 @@ def Check():
         cursor.execute(sql2)
         connection.commit()
         v2 = cursor.fetchone()[0]
-
         if Decimal(v1) != v2:
             print("money err",Decimal(v1),v2)
             exit()
-    
+
 if __name__ == '__main__':
     Check()
     time.sleep(3)
     while True:
-        height = Getforkheight()
-        if height > 0:
-            obj = Getblockhash(height)
-            if "result" in obj:
-                blockHash = obj["result"][0]
-                ExecTask(blockHash)
+        try:
+            height = Getforkheight()
+            if height > 0:
+                obj = Getblockhash(height)
+                print(obj)
+                if "result" in obj:
+                    blockHash = obj["result"][0]
+                    ExecTask(blockHash) 
+                else:
+                    print("getblockhash error:",obj)   
+                    time.sleep(3)                    
             else:
-                print("getblockhash error:",obj)   
-            time.sleep(3)                    
-        else:
-            print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),"wait task 3s ...")
-            time.sleep(3)
-            
+                print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),"wait task 3s ...")
+                time.sleep(3)
+        except KeyboardInterrupt:
+            sys.exit()
+        except:
+            traceback.print_exc()
+            print("restart.....")
+            python = sys.executable
+            os.execl(python, python, *sys.argv)
