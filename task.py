@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
-
 import requests
 import json
 import pymysql
@@ -110,6 +109,9 @@ def InsertTx(block_id,tx,cursor):
         amount = in_money - (amount  + txfee)
         sql = "insert Tx(block_hash,txid,form,`to`,amount,free,type,lock_until,n,data,transtime)values(%s,%s,%s,%s,%s,%s,%s,%s,1,%s,%s)"
         cursor.execute(sql,[block_id,tx["txid"],tx["sendfrom"],tx["sendfrom"],amount,0,tx["type"],0,data,tx["time"]])
+
+    sql = "delete from PoolTx where txid = %s"
+    cursor.execute(sql,tx["txid"])
     
 
 def RollBACK(block_hash):
@@ -277,6 +279,8 @@ def Getforkheight():
     if end_data == None:
         return 1
     if obj > end_data[2]:
+        if (obj - end_data[2]) > 10000:
+            return end_data[2] + 10000
         return obj
     else:
         return 0
@@ -296,9 +300,16 @@ def Check():
         if Decimal(v1) != v2:
             print("money err",Decimal(v1),v2)
             exit()
+def Run():
+    height = Getforkheight()
+    if height > 0:
+        obj = Getblockhash(height)
+        if "result" in obj:
+            blockHash = obj["result"][0]
+            ExecTask(blockHash)
 
 if __name__ == '__main__':
-    Check()
+    #Check()
     time.sleep(3)
     while True:
         try:
