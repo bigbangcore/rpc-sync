@@ -67,18 +67,23 @@ def InsertPoolTx(txid):
         cursor.execute(sql,[tx["txid"], tx["sendfrom"],tx["sendto"],tx["amount"],tx["txfee"],tx["type"],tx["lockuntil"],data,dpos_in,client_in,dpos_out,client_out,tx["time"]])
     connection.commit()
 
+
+event_block = threading.Event()
+is_exit = False
 class block_run(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
     def run(self):
-        task.Run()
+        while is_exit == False:
+            event_block.wait()
+            event_block.clear()
+            task.Run()
 
 
 if __name__ == '__main__':
     try:
         br = block_run()
         br.start()
-        br.join()
         ADDR = ("127.0.0.1",9905)
         s = socket(AF_INET,SOCK_STREAM)
         s.connect(ADDR)
@@ -173,9 +178,7 @@ if __name__ == '__main__':
                     block = lws_pb2.Block()
                     add.object.Unpack(block)
                     print("block nHeight:",block.nHeight)
-                    if br.isAlive() == False:
-                        br = block_run()
-                        br.start()
+                    event_block.set()
         
             elif base.msg == dbp_pb2.PING:
                 p = dbp_pb2.Pong()
@@ -187,10 +190,15 @@ if __name__ == '__main__':
                 print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),"PING PONG ...")
         s.close()
     except KeyboardInterrupt:
+        is_exit = True
+        event_block.set()
+        time.sleep(2)
         sys.exit()
     except:
+        is_exit = True
+        event_block.set()
         traceback.print_exc()
-        print("restart.....")
+        print("restart.....",time.time())
         time.sleep(3)
         python = sys.executable
         os.execl(python, python, *sys.argv)
