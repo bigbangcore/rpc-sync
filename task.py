@@ -1,5 +1,5 @@
-#!/usr/bin/python3
-# -*- coding: UTF-8 -*-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import requests
 import json
 import pymysql
@@ -10,16 +10,11 @@ import os
 import config
 import logging
 import traceback 
+import bbc_lib
 
-from ctypes import *
-from binascii import a2b_hex
 from TokenDistribution import TokenDistribution
 
 td = TokenDistribution()
-
-bbc = cdll.LoadLibrary('./libcrypto.so')
-bbc.GetAddr.argtypes = [c_char_p]
-bbc.GetAddr.restype = c_char_p
 
 url = config.url
 connection = pymysql.connect(host=config.host, port=config.port, user=config.user, password=config.password, db=config.db)
@@ -70,8 +65,8 @@ def GetUsefulBlock(block_hash):
 
 
 def GetVote(hex_str):
-    dpos_addr = bbc.GetAddr(a2b_hex(hex_str[0:66]))
-    client_addr = bbc.GetAddr(a2b_hex(hex_str[66:]))
+    dpos_addr = bbc_lib.Hex2Addr(hex_str[0:66])
+    client_addr = bbc_lib.Hex2Addr(hex_str[66:])    
     return dpos_addr,client_addr
 
 def InsertTx(block_id,tx,cursor):

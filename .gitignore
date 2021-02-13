@@ -2,3 +2,5 @@
 config.py
 log_task.log
 logs/
+_bbc_lib.cpython-36m-x86_64-linux-gnu.so
+bbc_lib.py
