@@ -1,5 +1,10 @@
 ## rpc and dbp sync data
 
+### 安装bbc_lib
+```bash
+cd bbc_lib
+./setup.sh
+```
 ### 仅同步区块数据
 ```bash
 sudo pip3 install requests
