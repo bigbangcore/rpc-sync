@@ -4,3 +4,4 @@ log_task.log
 logs/
 _bbc_lib.cpython-36m-x86_64-linux-gnu.so
 bbc_lib.py
+_bbc_lib.cpython-38-x86_64-linux-gnu.so
