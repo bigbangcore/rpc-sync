@@ -220,7 +220,8 @@ def ExecTask(block_hash):
     task_add = []
     db_res = GetUsefulBlock(block_hash)
     while db_res == None:
-        print(block_hash)
+        #print(block_hash,"dddd")
+        #time.sleep(30000)
         task_add.append(block_hash)
         data = {"id":1,
                 "method":"getblock",
@@ -236,7 +237,7 @@ def ExecTask(block_hash):
             return
         block_hash = res["hashPrev"]
         print(res["height"])
-        if res["height"] == 1:
+        if res["height"] == 447532:
             break
         db_res = GetUsefulBlock(block_hash)
     if db_res != None:
@@ -253,8 +254,10 @@ def Getblockhash(height):
     data = {"id":1,
             "method":"getblockhash",
             "jsonrpc":"2.0",
-            "params":{"height":height}
-            }
+            "params":{
+                "height":height,
+                "fork": config.forkid  
+            }}
     response = requests.post(url, json=data)
     return json.loads(response.text)
 
@@ -262,8 +265,12 @@ def Getforkheight():
     data = {"id":2,
             "method":"getforkheight",
             "jsonrpc":"2.0",
-            "params":{}}
+            "params":{
+                "fork": config.forkid  
+            }}
+
     response = requests.post(url, json=data)
+    #print(response.text)
     obj = json.loads(response.text)
     if "result" in obj:
         obj = obj["result"]
@@ -272,10 +279,18 @@ def Getforkheight():
     
     end_data = GetEndData()
     if end_data == None:
-        return 1
+        data = {"id":1,
+            "method":"getblock",
+            "jsonrpc":"2.0",
+            "params":{
+                "block": config.forkid  
+            }}
+        response = requests.post(url, json=data)
+        obj = json.loads(response.text)
+        return obj["result"]["height"]
     if obj > end_data[2]:
-        if (obj - end_data[2]) > 10000:
-            return end_data[2] + 10000
+        if (obj - end_data[2]) > 100:
+            return end_data[2] + 100
         return obj
     else:
         return 0
@@ -300,12 +315,12 @@ def Run():
     if height > 0:
         obj = Getblockhash(height)
         if "result" in obj:
-            blockHash = obj["result"][0]
+            blockHash = obj["result"][-1]
             ExecTask(blockHash)
 
 if __name__ == '__main__':
     #Check()
-    time.sleep(3)
+    #time.sleep(30000)
     while True:
         try:
             height = Getforkheight()
@@ -313,7 +328,7 @@ if __name__ == '__main__':
                 obj = Getblockhash(height)
                 print(obj)
                 if "result" in obj:
-                    blockHash = obj["result"][0]
+                    blockHash = obj["result"][-1]
                     ExecTask(blockHash) 
                 else:
                     print("getblockhash error:",obj)   
